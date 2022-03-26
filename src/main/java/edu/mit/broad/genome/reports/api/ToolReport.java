@@ -16,6 +16,7 @@ import edu.mit.broad.genome.utils.ZipUtility;
 import edu.mit.broad.xbench.core.api.Application;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.genepattern.io.ImageUtil;
@@ -590,6 +591,14 @@ public class ToolReport implements Report {
         try {
             File cssFile = _createFile("xtools", "css", fReportDir);
             FileUtils.copyURLToFile(JarResources.toURL("xtools.css"), cssFile);
+            
+            if (StringUtils.containsIgnoreCase(fReportDir.getName(), "use_plotly")) {
+                File plotlyFile = _createFile("plotly-2.11.0.min", "js", fReportDir);
+                FileUtils.copyURLToFile(JarResources.toURL("plotly-2.11.0.min.js"), plotlyFile);
+                File plotFile = _createFile("gsea-plot", "js", fReportDir);
+                FileUtils.copyURLToFile(JarResources.toURL("gsea-plot.js"), plotFile);
+            }
+            
             fDoneAddingCss = true;
         } catch (Throwable t) {
             klog.error("Trouble copying over CSS", t);

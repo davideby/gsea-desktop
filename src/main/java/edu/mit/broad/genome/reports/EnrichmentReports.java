@@ -31,6 +31,7 @@ import gnu.trove.TIntIntHashMap;
 import gnu.trove.TIntObjectHashMap;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.ecs.StringElement;
 import org.apache.ecs.html.*;
 import org.slf4j.Logger;
@@ -66,6 +67,7 @@ import java.awt.Font;
 import java.awt.geom.Ellipse2D;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -234,9 +236,10 @@ public class EnrichmentReports {
         klog.info("Creating marker selection reports ...");
         final StringDataframe sdfGeneList = MiscReports.createRankOrderedGeneList(name, rlReal, fann_opt);
         final File real_gene_list_file_tsv = report.savePageTsv(sdfGeneList, "ranked_gene_list_" + classA_name_opt + "_versus_" + classB_name_opt + "_" + report.getTimestamp(), saveInThisDir);
-        
+        String reportDirName = saveInThisDir.getName();
+
         File real_gene_list_heat_map_corr_plot_html_file = null;
-        if (my_gex_ds_for_heat_map != null && template != null) {
+        if (my_gex_ds_for_heat_map != null && template != null && !StringUtils.containsIgnoreCase(reportDirName, "suppress_img")) {
             HtmlPage real_gene_list_heat_map_corr_plot_html = MiscReports.createDatasetHeatMapAndCorrelationPlots(my_gex_ds_for_heat_map,
                     template, rlReal, saveInThisDir, createSvgs, createGcts);
             real_gene_list_heat_map_corr_plot_html_file = report.savePage(real_gene_list_heat_map_corr_plot_html, saveInThisDir);
@@ -244,7 +247,7 @@ public class EnrichmentReports {
 
         File butterfly_file = null;
         File butterfly_file_svg = null;
-        if (edb.getPermutationTest() != null) {
+        if (edb.getPermutationTest() != null && !StringUtils.containsIgnoreCase(reportDirName, "suppress_img")) {
             try {
                 final XChart xc = EnrichmentReports.createButterflyChart(edb.getPermutationTest());
                 butterfly_file = new File(saveInThisDir, "butterfly_plot.png");
@@ -283,29 +286,40 @@ public class EnrichmentReports {
         HtmlPage htmlPage = new HtmlPage(pos_name, pos_title);
         htmlPage.addTable(pos_basic.rdf, pos_basic_tsv.getName(), false); // dont show row names (ditto to gs name)
         final File pos_basic_html = report.savePage(htmlPage, saveInThisDir);
-        final File pos_snapshot_html = report.savePage(createSnapshotPage(true, pos_basic.reports), saveInThisDir);
+        File pos_snapshot_html = null;
+        if (!StringUtils.containsIgnoreCase(reportDirName, "suppress_img")) {
+            pos_snapshot_html = report.savePage(createSnapshotPage(true, pos_basic.reports), saveInThisDir);
+        }
 
         htmlPage = new HtmlPage(neg_name, neg_title);
         htmlPage.addTable(neg_basic.rdf, neg_basic_tsv.getName(), false); // dont show row names (ditto to gs name)
         final File neg_basic_html = report.savePage(htmlPage, saveInThisDir);
-        final File neg_snapshot_html = report.savePage(createSnapshotPage(false, neg_basic.reports), saveInThisDir);
+        File neg_snapshot_html = null;
+        if (!StringUtils.containsIgnoreCase(reportDirName, "suppress_img")) {
+            neg_snapshot_html = report.savePage(createSnapshotPage(false, neg_basic.reports), saveInThisDir);
+        }
 
-        final XChart pvalues_nes_plot_xc = createNESvsSignificancePlot(edb);
-        final File pvalues_nes_plot_file = report.savePage(pvalues_nes_plot_xc, 500, 500, saveInThisDir);
+        XChart pvalues_nes_plot_xc = null;
+        XChart global_es_histogram_xc = null;
+        File pvalues_nes_plot_file = null;
         File pvalues_nes_plot_svg_file = null;
-        if (createSvgs) {
-            pvalues_nes_plot_svg_file = ImageUtil.getSvgFileFromImgFile(pvalues_nes_plot_file, true);
-            report.savePageSvg(pvalues_nes_plot_xc, 500, 500, pvalues_nes_plot_svg_file);
-        }
-
-        final XChart global_es_histogram_xc = createGlobalESHistogram(AuxUtils.getAuxNameOnlyNoHash(phenotypeName), edb.getESS_lv());
-        final File global_es_histogram_file = report.savePage(global_es_histogram_xc, 500, 500, saveInThisDir);
+        File global_es_histogram_file = null;
         File global_es_histogram_svg_file = null;
-        if (createSvgs) {
-            global_es_histogram_svg_file = ImageUtil.getSvgFileFromImgFile(global_es_histogram_file, true);
-            report.savePageSvg(global_es_histogram_xc, 500, 500, global_es_histogram_svg_file);
+        if (!StringUtils.containsIgnoreCase(reportDirName, "suppress_img")) {
+            pvalues_nes_plot_xc = createNESvsSignificancePlot(edb);
+            pvalues_nes_plot_file = report.savePage(pvalues_nes_plot_xc, 500, 500, saveInThisDir);
+            if (createSvgs) {
+                pvalues_nes_plot_svg_file = ImageUtil.getSvgFileFromImgFile(pvalues_nes_plot_file, true);
+                report.savePageSvg(pvalues_nes_plot_xc, 500, 500, pvalues_nes_plot_svg_file);
+            }
+    
+            global_es_histogram_xc = createGlobalESHistogram(AuxUtils.getAuxNameOnlyNoHash(phenotypeName), edb.getESS_lv());
+            global_es_histogram_file = report.savePage(global_es_histogram_xc, 500, 500, saveInThisDir);
+            if (createSvgs) {
+                global_es_histogram_svg_file = ImageUtil.getSvgFileFromImgFile(global_es_histogram_file, true);
+                report.savePageSvg(global_es_histogram_xc, 500, 500, global_es_histogram_svg_file);
+            }
         }
-
         // Ok, build the page
 
         // Class A
@@ -322,7 +336,10 @@ public class EnrichmentReports {
             StringElement line2a = new StringElement(edb.getNumNominallySig(0.01f, true) + " gene sets are significantly enriched at nominal pvalue < 1%");
             StringElement line2b = new StringElement(edb.getNumNominallySig(0.05f, true) + " gene sets are significantly enriched at nominal pvalue < 5%");
             StringElement line3 = new StringElement(edb.getNumFDRSig(0.25f, true) + " gene sets are significant at FDR < 25%");
-            StringElement line4 = HtmlFormat.Links.hyper("Snapshot", pos_snapshot_html, "of enrichment results", saveInThisDir);
+            StringElement line4 = null;
+            if (pos_snapshot_html != null) {
+                line4 = HtmlFormat.Links.hyper("Snapshot", pos_snapshot_html, "of enrichment results", saveInThisDir);
+            }
             StringElement line5 = HtmlFormat.Links.hyper("Detailed", "enrichment results in html", pos_basic_html, " format", saveInThisDir);
             StringElement line6 = HtmlFormat.Links.hyper("Detailed", "enrichment results in TSV", pos_basic_tsv, " format (tab delimited text)", saveInThisDir);
 
@@ -330,7 +347,7 @@ public class EnrichmentReports {
             ul.addElement(new LI(line3));
             ul.addElement(new LI(line2a));
             ul.addElement(new LI(line2b));
-            ul.addElement(new LI(line4));
+            if (line4 != null) { ul.addElement(new LI(line4)); }
             ul.addElement(new LI(line5));
             ul.addElement(new LI(line6));
             ul.addElement(new LI(line7));
@@ -354,14 +371,17 @@ public class EnrichmentReports {
             StringElement line2a = new StringElement(edb.getNumNominallySig(0.01f, false) + " gene sets are significantly enriched at nominal pvalue < 1%");
             StringElement line2b = new StringElement(edb.getNumNominallySig(0.05f, false) + " gene sets are significantly enriched at nominal pvalue < 5%");
             StringElement line3 = new StringElement(edb.getNumFDRSig(0.25f, false) + " gene sets are significantly enriched at FDR < 25%");
-            StringElement line4 = HtmlFormat.Links.hyper("Snapshot", neg_snapshot_html, "of enrichment results", saveInThisDir);
+            StringElement line4 = null;
+            if (neg_snapshot_html != null) {
+                line4 = HtmlFormat.Links.hyper("Snapshot", neg_snapshot_html, "of enrichment results", saveInThisDir);
+            }
             StringElement line5 = HtmlFormat.Links.hyper("Detailed", "enrichment results in html", neg_basic_html, " format", saveInThisDir);
             StringElement line6 = HtmlFormat.Links.hyper("Detailed", "enrichment results in TSV", neg_basic_tsv, " format (tab delimited text)", saveInThisDir);
             ul.addElement(new LI(line1));
             ul.addElement(new LI(line3));
             ul.addElement(new LI(line2a));
             ul.addElement(new LI(line2b));
-            ul.addElement(new LI(line4));
+            if (line4 != null) { ul.addElement(new LI(line4)); }
             ul.addElement(new LI(line5));
             ul.addElement(new LI(line6));
             ul.addElement(new LI(line7));
@@ -455,18 +475,19 @@ public class EnrichmentReports {
         klog.info("Creating global reports ...");
         div = new Div();
         ul = new UL();
-        div.addElement(new H4("Global statistics and plots"));
-        ul.addElement(new LI(HtmlFormat.Links.hyper("Plot of ", "p-values <i>vs.</i> NES", pvalues_nes_plot_file, "", saveInThisDir)));
-        if (createSvgs) {
-            ul.addElement(new LI(HtmlFormat.Links.hyper("Plot of ", "p-values <i>vs.</i> NES", pvalues_nes_plot_svg_file, "(in compressed SVG format)", saveInThisDir)));
+        if (!StringUtils.containsIgnoreCase(reportDirName, "suppress_img")) {
+            div.addElement(new H4("Global statistics and plots"));
+            ul.addElement(new LI(HtmlFormat.Links.hyper("Plot of ", "p-values <i>vs.</i> NES", pvalues_nes_plot_file, "", saveInThisDir)));
+            if (createSvgs) {
+                ul.addElement(new LI(HtmlFormat.Links.hyper("Plot of ", "p-values <i>vs.</i> NES", pvalues_nes_plot_svg_file, "(in compressed SVG format)", saveInThisDir)));
+            }
+            ul.addElement(new LI(HtmlFormat.Links.hyper("Global ES", global_es_histogram_file, "histogram", saveInThisDir)));
+            if (createSvgs) {
+                ul.addElement(new LI(HtmlFormat.Links.hyper("Global ES", global_es_histogram_svg_file, "histogram (in compressed SVG format)", saveInThisDir)));
+            }
+            div.addElement(ul);
+            reportIndexPage.addBlock(div, false);
         }
-        ul.addElement(new LI(HtmlFormat.Links.hyper("Global ES", global_es_histogram_file, "histogram", saveInThisDir)));
-        if (createSvgs) {
-            ul.addElement(new LI(HtmlFormat.Links.hyper("Global ES", global_es_histogram_svg_file, "histogram (in compressed SVG format)", saveInThisDir)));
-        }
-        div.addElement(ul);
-        reportIndexPage.addBlock(div, false);
-
         // Other
         div = new Div();
         ul = new UL();
@@ -530,6 +551,29 @@ public class EnrichmentReports {
         // for the bg shading of the hit plot -- just needs to be made once for all sets on this rl
         final IntervalMarker[] markers = _markers(rl);
 
+        String reportDirName = saveDetailFilesInDir.getName();
+        if (StringUtils.containsIgnoreCase(reportDirName, "use_plotly")) {
+            StringBuffer geneLabels = new StringBuffer();
+            StringBuffer geneScores = new StringBuffer();
+            String sep = "[";
+            for (int i = 0; i < rl.getSize(); i++) {
+                geneLabels.append(sep).append("'").append(rl.getRankName(i)).append("'");
+                geneScores.append(sep).append(rl.getScore(i));
+                sep = ",";
+            }
+            geneLabels.append("]");
+            geneScores.append("]");
+            
+            File rankedDataScript = new File(saveDetailFilesInDir, "ranked-data.js");
+            try (FileWriter writer = new FileWriter(rankedDataScript)) {
+                writer.append("  var geneLabels = ").append(geneLabels.toString()).append(";").append(System.lineSeparator())
+                    .append("  var geneScores = ").append(geneScores.toString()).append(";");
+            } catch (IOException ie) {
+                // Need to do better...
+                throw new RuntimeException(ie);
+            }
+        }
+
         List<EnrichmentReport> ereports = new ArrayList<EnrichmentReport>();
         for (int r = 0; r < results.length; r++) {
             int coln = 0;
@@ -556,7 +600,8 @@ public class EnrichmentReports {
                     mer.fTsvPage.write(new FileOutputStream(new File(saveDetailFilesInDir, 
                             mer.fTsvPage.getName() + "." + Constants.TSV)));
                     PicFile[] pfs = htmlPage.getPicFiles();
-                    File plotFile = pfs[0].getFile(); // because image write likes to rename stuff
+                    // TODO: need a version with nullable files
+                    File plotFile = (pfs == null || pfs.length == 0) ? null : pfs[0].getFile(); // because image write likes to rename stuff
 
                     // @note IMP IMP dont re-use as want this to be light (just files)
                     ereports.add(new EnrichmentReportImpl(htmlFile, plotFile));
@@ -681,11 +726,85 @@ public class EnrichmentReports {
             final KeyValTable table = createSummaryTable(dsName, phenotypeName, upInClass, gset.getName(), es, nes, np, fdr, fwer);
             htmlPage.addTable("GSEA Results Summary", table);
 
+            String reportDirName = saveDetailFilesInDir.getName();
+            
             // add main es plot image (on top -- roels request, makes sense)
-            EnrichmentCharts combo = _createComboChart(gsetName, esProfile, esProfile_full_opt, 
-            		_hitIndices2Vector(rl.getSize(), hitIndices), rl, classAName_opt, classBName_opt, markers);
-            htmlPage.addChart(combo.comboChart, 500, 500, saveDetailFilesInDir, createSvgs);
+            if (!StringUtils.containsIgnoreCase(reportDirName, "suppress_img")) {
+                EnrichmentCharts combo = _createComboChart(gsetName, esProfile, esProfile_full_opt, 
+                        _hitIndices2Vector(rl.getSize(), hitIndices), rl, classAName_opt, classBName_opt, markers);
+                htmlPage.addChart(combo.comboChart, 500, 500, saveDetailFilesInDir, createSvgs);
+            }
 
+            if (StringUtils.containsIgnoreCase(reportDirName, "use_plotly")) {
+                Div mtnPlotChart = new Div();
+                mtnPlotChart.setID(gsetName + "_mtn");
+                mtnPlotChart.addAttribute("style", "height: 100%; width: 100%");
+                htmlPage.addBlock(mtnPlotChart);
+                
+//                StringBuffer geneLabels = new StringBuffer();
+//                StringBuffer geneScores = new StringBuffer();
+//                List<String> rankedNames =  rl.getRankedNames();
+//                String sep = "[";
+//                for (int i = 0; i < rl.getSize(); i++) {
+//                    geneLabels.append(sep).append("'").append(rl.getRankName(i)).append("'");
+//                    geneScores.append(sep).append(rl.getScore(i));
+//                    sep = ",";
+//                }
+//                geneLabels.append("]");
+//                geneScores.append("]");
+                
+                
+                StringBuffer hitIndicesArr = new StringBuffer();
+                StringBuffer hitLabels = new StringBuffer();
+                String sep = "[";
+                for (int i = 0; i < hitIndices.length; i++) {
+                    int hitIndex = hitIndices[i];
+                    hitIndicesArr.append(sep).append(hitIndex);
+                    hitLabels.append(sep).append("'").append(rl.getRankName(hitIndex)).append("'");
+                    sep = ",";
+                }
+                hitIndicesArr.append("]");
+                hitLabels.append("]");
+                
+                StringBuilder runningESPos = new StringBuilder();
+                //StringBuilder runningESNeg = new StringBuilder();
+                sep = "[";
+                for (int i = 0; i < esProfile_full_opt.getSize(); i++) {
+                    float esAtPosition = esProfile_full_opt.getElement(i);
+                    runningESPos.append(sep).append(esAtPosition);
+//                    if (esAtPosition >= 0.0) {
+//                        runningESPos.append(sep).append(esAtPosition);
+//                        runningESNeg.append(sep).append("0.0");
+//                    } else {
+//                        runningESPos.append(sep).append("0.0");
+//                        runningESNeg.append(sep).append(esAtPosition);
+//                    }
+                    sep = ",";
+                }
+                
+                runningESPos.append("]");
+//                runningESNeg.append("]");
+                
+                StringBuilder mtnPlotScript = new StringBuilder();
+                mtnPlotScript.append("<script src='plotly-2.11.0.min.js'></script>").append(System.lineSeparator())
+                    .append("<script src='gsea-plot.js'></script>").append(System.lineSeparator())
+                    .append("<script src='ranked-data.js'></script>").append(System.lineSeparator())
+                    .append("<script>").append(System.lineSeparator())
+                    .append("  var geneSetName = '").append(gsetName).append("';").append(System.lineSeparator())
+//                    .append("  var geneLabels = ").append(geneLabels.toString()).append(";").append(System.lineSeparator())
+//                    .append("  var geneScores = ").append(geneScores.toString()).append(";").append(System.lineSeparator())
+                    .append("  var hitIndices = ").append(hitIndicesArr.toString()).append(";").append(System.lineSeparator())
+                    .append("  var hitLabels = ").append(hitLabels.toString()).append(";").append(System.lineSeparator())
+                    .append("  var runningES = ").append(runningESPos.toString()).append(";").append(System.lineSeparator())
+//                    .append("  var runningESNeg = ").append(runningESNeg.toString()).append(";").append(System.lineSeparator())
+                    .append("  var geneSetScore = ").append(Printf.format(es)).append(";").append(System.lineSeparator())
+                    .append("  var featureCount = ").append(esProfile_full_opt.getSize()).append(";").append(System.lineSeparator())
+                    .append("  mountain_plot(geneSetName, geneLabels, geneScores, hitIndices, hitLabels, runningES, geneSetScore, featureCount);").append(System.lineSeparator())
+                    .append("</script>");
+                Div mtnPlotDiv = new Div(mtnPlotScript.toString());
+                htmlPage.addBlock(mtnPlotDiv);
+            }
+            
             // add detailed report table
             htmlPage.addTable(rdf, tsvPage.getName() + "." + tsvPage.getExt(), false);
 
@@ -693,9 +812,11 @@ public class EnrichmentReports {
             if (rl instanceof ScoredDataset && true) {
                 // Build extracted dataset based on gene set, maintaining the order in the ScoredDataset (i.e gset order ignored)
                 Dataset extractedDSForGSet = new DatasetGenerators().extractRowsSorted((ScoredDataset) rl, gset);
-                htmlPage.addHeatMap(gsetName, "Blue-Pink O' Gram in the Space of the Analyzed GeneSet",
-                        new GramImagerImpl().createBpogHeatMap(extractedDSForGSet, template_opt),
-                        saveDetailFilesInDir, createSvgs);
+                if (!StringUtils.containsIgnoreCase(reportDirName, "suppress_img")) {
+                    htmlPage.addHeatMap(gsetName, "Blue-Pink O' Gram in the Space of the Analyzed GeneSet",
+                            new GramImagerImpl().createBpogHeatMap(extractedDSForGSet, template_opt),
+                            saveDetailFilesInDir, createSvgs);
+                }
                 if (createGcts) {
                     File gctFile = new File(saveDetailFilesInDir, gsetName + ".gct");
                     GctParser gctExporter = new GctParser();
@@ -709,8 +830,10 @@ public class EnrichmentReports {
             }
 
             if (rndEss != null && rndEss.getSize() != 0) {
-                XChart chart = createESNullDistribHistogram(gsetName, classAName_opt, classBName_opt, es, rndEss);
-                htmlPage.addChart(chart, 500, 500, saveDetailFilesInDir, createSvgs);
+                if (!StringUtils.containsIgnoreCase(reportDirName, "suppress_img")) {
+                    XChart chart = createESNullDistribHistogram(gsetName, classAName_opt, classBName_opt, es, rndEss);
+                    htmlPage.addChart(chart, 500, 500, saveDetailFilesInDir, createSvgs);
+                }
             }
         } catch (Throwable t) {
             htmlPage.addError("Trouble making HtmlPage", t);
